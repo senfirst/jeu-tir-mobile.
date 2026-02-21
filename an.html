@@ -3,185 +3,191 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jeu de Tir Arcade</title>
+<title>Jeu des Mots ULTIME</title>
+
 <style>
-body { margin:0; overflow:hidden; background:black; font-family:Arial; color:white; }
-canvas { display:block; margin:auto; background:#000814; }
-#score { position:absolute; top:10px; left:10px; font-size:20px; }
-#lives { position:absolute; top:10px; right:10px; font-size:20px; }
-#level { position:absolute; top:40px; left:10px; font-size:20px; }
-#mobile { position:fixed; bottom:10px; width:100%; display:flex; justify-content:center; z-index:100; }
-.btn { width:60px; height:60px; border-radius:50%; background:#f1c40f; display:flex; justify-content:center; align-items:center; font-size:30px; margin:10px; user-select:none; }
+body {
+    margin:0;
+    overflow:hidden;
+    font-family:Arial;
+    background:black;
+    color:white;
+    text-align:center;
+}
+canvas {
+    position:fixed;
+    top:0;
+    left:0;
+    z-index:-1;
+}
+.menu, .game {
+    margin-top:100px;
+}
+button {
+    padding:15px 25px;
+    margin:10px;
+    font-size:18px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    background:#f1c40f;
+}
+#word { font-size:36px; letter-spacing:10px; margin:20px; }
 </style>
 </head>
+
 <body>
 
-<div id="score">Score : 0</div>
-<div id="lives">❤️ x3</div>
-<div id="level">Niveau : 1</div>
+<canvas id="stars"></canvas>
 
-<canvas id="game"></canvas>
-
-<div id="mobile">
-    <div class="btn" id="left">◀</div>
-    <div class="btn" id="shoot">🔥</div>
-    <div class="btn" id="right">▶</div>
+<div class="menu" id="menu">
+<h1>🎮 Jeu des Mots</h1>
+<button onclick="startMenu()">▶️ Jouer</button>
+<button onclick="quitGame()">❌ Quitter</button>
 </div>
 
-<audio id="music" src="music.mp3" loop></audio>
-<audio id="shootSound" src="shoot.mp3"></audio>
-<audio id="explosionSound" src="explosion.mp3"></audio>
+<div class="game" id="game" style="display:none">
+<div id="category"></div>
+<div id="word"></div>
+<div id="letters"></div>
+<div id="lives"></div>
+<div id="score"></div>
+<div id="bestScore"></div>
+<button onclick="giveHint()">💡 Indice</button>
+</div>
+
+<!-- MUSIQUE INTEGREE -->
+<audio id="music" src="https://cdn.pixabay.com/audio/2022/03/15/audio_115b9b5b0a.mp3" loop></audio>
+
+<audio id="correctSound" src="correct.mp3"></audio>
+<audio id="wrongSound" src="wrong.mp3"></audio>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-
-let player = { x: canvas.width/2-25, y: canvas.height-80, w:50, h:50, speed:7 };
-let bullets = [];
-let enemies = [];
-let score = 0;
-let lives = 3;
-let level = 1;
-let boss = null;
-
-const music = document.getElementById("music");
-const shootSound = document.getElementById("shootSound");
-const explosionSound = document.getElementById("explosionSound");
-let musicPlaying = false;
-
-/* Joueur */
-function drawPlayer() {
-    ctx.fillStyle = "cyan";
-    ctx.fillRect(player.x, player.y, player.w, player.h);
+// étoiles animées
+const canvas=document.getElementById("stars");
+const ctx=canvas.getContext("2d");
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+let stars=[];
+for(let i=0;i<100;i++){
+stars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*2});
 }
-
-/* Tirer */
-function shoot() {
-    bullets.push({ x: player.x+player.w/2-5, y: player.y, w:10, h:20, speed:10 });
-    shootSound.currentTime=0;
-    shootSound.play();
-}
-
-/* Balles */
-function drawBullets() {
-    ctx.fillStyle = "yellow";
-    bullets.forEach((b,i)=>{
-        b.y -= b.speed;
-        ctx.fillRect(b.x,b.y,b.w,b.h);
-        if(b.y<0) bullets.splice(i,1);
-    });
-}
-
-/* Ennemis */
-function spawnEnemy(){
-    if(level <5 || boss) return; // Boss level après 5
-    let w = 40, h = 40;
-    enemies.push({ x: Math.random()*(canvas.width-w), y:-h, w, h, speed:2+Math.random()*level });
-}
-setInterval(spawnEnemy,1000);
-
-function spawnBoss(){
-    boss = { x: canvas.width/2 - 50, y: -100, w:100, h:100, speed:1, hp: 20+level*5 };
-}
-
-/* Dessiner ennemis et boss */
-function drawEnemies(){
-    ctx.fillStyle = "red";
-    enemies.forEach((e,ei)=>{
-        e.y += e.speed;
-        ctx.fillRect(e.x,e.y,e.w,e.h);
-
-        // Collision balle
-        bullets.forEach((b,bi)=>{
-            if(b.x < e.x+e.w && b.x+b.w > e.x && b.y < e.y+e.h && b.y+b.h > e.y){
-                enemies.splice(ei,1);
-                bullets.splice(bi,1);
-                score++;
-                document.getElementById("score").innerText = "Score : "+score;
-                explosionSound.currentTime=0;
-                explosionSound.play();
-            }
-        });
-
-        // Collision joueur
-        if(player.x < e.x+e.w && player.x+player.w > e.x && player.y < e.y+e.h && player.y+player.h > e.y){
-            enemies.splice(ei,1);
-            lives--;
-            document.getElementById("lives").innerText = "❤️ x"+lives;
-            explosionSound.currentTime=0;
-            explosionSound.play();
-            if(lives<=0){
-                alert("💀 Game Over ! Score : "+score);
-                location.reload();
-            }
-        }
-
-        if(e.y>canvas.height) enemies.splice(ei,1);
-    });
-
-    // Boss
-    if(boss){
-        boss.y += boss.speed;
-        if(boss.y > 50) boss.speed=0;
-        ctx.fillStyle="purple";
-        ctx.fillRect(boss.x,boss.y,boss.w,boss.h);
-
-        // collision balle
-        bullets.forEach((b,bi)=>{
-            if(b.x < boss.x+boss.w && b.x+b.w > boss.x && b.y < boss.y+boss.h && b.y+b.h > boss.y){
-                bullets.splice(bi,1);
-                boss.hp--;
-                explosionSound.currentTime=0;
-                explosionSound.play();
-                if(boss.hp<=0){
-                    boss=null;
-                    level++;
-                    document.getElementById("level").innerText="Niveau : "+level;
-                }
-            }
-        });
-
-        // collision joueur
-        if(player.x < boss.x+boss.w && player.x+player.w > boss.x && player.y < boss.y+boss.h && player.y+player.h > boss.y){
-            lives=0;
-            document.getElementById("lives").innerText="❤️ x0";
-            alert("💀 Game Over ! Score : "+score);
-            location.reload();
-        }
-    }
-}
-
-/* Clavier */
-document.addEventListener("keydown", e=>{
-    if(e.key==="ArrowLeft") player.x -= player.speed;
-    if(e.key==="ArrowRight") player.x += player.speed;
-    if(e.key===" ") shoot();
+function drawStars(){
+ctx.clearRect(0,0,canvas.width,canvas.height);
+ctx.fillStyle="white";
+stars.forEach(s=>{
+ctx.beginPath();
+ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+ctx.fill();
+s.y+=0.5;
+if(s.y>canvas.height)s.y=0;
 });
+requestAnimationFrame(drawStars);
+}
+drawStars();
 
-/* Mobile */
-document.getElementById("left").addEventListener("touchstart", ()=>{ player.x -= player.speed*3; });
-document.getElementById("right").addEventListener("touchstart", ()=>{ player.x += player.speed*3; });
-document.getElementById("shoot").addEventListener("touchstart", shoot);
-
-/* Musique */
-function toggleMusic(){
-    if(musicPlaying){ music.pause(); } else { music.play(); }
-    musicPlaying=!musicPlaying;
+// menu
+function startMenu(){
+document.getElementById("menu").style.display="none";
+document.getElementById("game").style.display="block";
+document.getElementById("music").play();
+startGame();
+}
+function quitGame(){
+alert("Merci d'avoir joué !");
 }
 
-/* Boucle du jeu */
-function gameLoop(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    drawPlayer();
-    drawBullets();
-    drawEnemies();
-    if(level>=5 && !boss) spawnBoss();
-    requestAnimationFrame(gameLoop);
+// jeu
+const words=[
+{word:"chat",category:"Animal"},
+{word:"senegal",category:"Pays"},
+{word:"ordinateur",category:"Tech"},
+{word:"mosquee",category:"Religion"},
+{word:"pomme",category:"Fruit"}
+];
+
+let score=0;
+let bestScore=localStorage.getItem("bestScore")||0;
+let selectedWord="";
+let displayWord=[];
+let lives=6;
+let hintUsed=false;
+
+function updateLives(){
+document.getElementById("lives").innerText="❤️".repeat(lives);
 }
 
-gameLoop();
+function startGame(){
+let chosen=words[Math.floor(Math.random()*words.length)];
+selectedWord=chosen.word;
+document.getElementById("category").innerText="Catégorie : "+chosen.category;
+displayWord=Array(selectedWord.length).fill("_");
+lives=6;
+hintUsed=false;
+updateLives();
+document.getElementById("word").innerText=displayWord.join(" ");
+document.getElementById("score").innerText="Score : "+score;
+document.getElementById("bestScore").innerText="Meilleur Score : "+bestScore;
+generateButtons();
+}
+
+function generateButtons(){
+const lettersDiv=document.getElementById("letters");
+lettersDiv.innerHTML="";
+for(let i=65;i<=90;i++){
+let letter=String.fromCharCode(i).toLowerCase();
+let btn=document.createElement("button");
+btn.innerText=letter;
+btn.onclick=()=>guess(letter,btn);
+lettersDiv.appendChild(btn);
+}
+}
+
+function guess(letter,btn){
+btn.disabled=true;
+let correct=false;
+for(let i=0;i<selectedWord.length;i++){
+if(selectedWord[i]===letter){
+displayWord[i]=letter;
+correct=true;
+}
+}
+document.getElementById("word").innerText=displayWord.join(" ");
+if(!correct){
+lives--;
+updateLives();
+}
+checkWin();
+}
+
+function giveHint(){
+if(hintUsed)return;
+let hidden=[];
+for(let i=0;i<displayWord.length;i++){
+if(displayWord[i]==="_")hidden.push(i);
+}
+if(hidden.length===0)return;
+let rand=hidden[Math.floor(Math.random()*hidden.length)];
+displayWord[rand]=selectedWord[rand];
+document.getElementById("word").innerText=displayWord.join(" ");
+hintUsed=true;
+}
+
+function checkWin(){
+if(!displayWord.includes("_")){
+score++;
+if(score>bestScore){
+bestScore=score;
+localStorage.setItem("bestScore",bestScore);
+}
+startGame();
+}
+if(lives<=0){
+alert("Game Over ! Mot : "+selectedWord);
+score=0;
+startGame();
+}
+}
 </script>
 
 </body>
