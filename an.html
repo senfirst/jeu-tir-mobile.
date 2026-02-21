@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jeu de Tir Mobile</title>
+<title>Jeu de Tir Arcade</title>
 <style>
 body { margin:0; overflow:hidden; background:black; font-family:Arial; color:white; }
 canvas { display:block; margin:auto; background:#000814; }
 #score { position:absolute; top:10px; left:10px; font-size:20px; }
 #lives { position:absolute; top:10px; right:10px; font-size:20px; }
-button { position:absolute; top:50px; right:10px; padding:10px 15px; font-size:16px; cursor:pointer; z-index:100; }
+#level { position:absolute; top:40px; left:10px; font-size:20px; }
 #mobile { position:fixed; bottom:10px; width:100%; display:flex; justify-content:center; z-index:100; }
 .btn { width:60px; height:60px; border-radius:50%; background:#f1c40f; display:flex; justify-content:center; align-items:center; font-size:30px; margin:10px; user-select:none; }
 </style>
@@ -18,8 +18,7 @@ button { position:absolute; top:50px; right:10px; padding:10px 15px; font-size:1
 
 <div id="score">Score : 0</div>
 <div id="lives">❤️ x3</div>
-<button onclick="toggleMusic()">🎵 Musique ON/OFF</button>
-<audio id="music" src="music.mp3" loop></audio>
+<div id="level">Niveau : 1</div>
 
 <canvas id="game"></canvas>
 
@@ -28,6 +27,10 @@ button { position:absolute; top:50px; right:10px; padding:10px 15px; font-size:1
     <div class="btn" id="shoot">🔥</div>
     <div class="btn" id="right">▶</div>
 </div>
+
+<audio id="music" src="music.mp3" loop></audio>
+<audio id="shootSound" src="shoot.mp3"></audio>
+<audio id="explosionSound" src="explosion.mp3"></audio>
 
 <script>
 const canvas = document.getElementById("game");
@@ -40,8 +43,13 @@ let bullets = [];
 let enemies = [];
 let score = 0;
 let lives = 3;
-let music = document.getElementById("music");
-let playing = false;
+let level = 1;
+let boss = null;
+
+const music = document.getElementById("music");
+const shootSound = document.getElementById("shootSound");
+const explosionSound = document.getElementById("explosionSound");
+let musicPlaying = false;
 
 /* Joueur */
 function drawPlayer() {
@@ -51,10 +59,12 @@ function drawPlayer() {
 
 /* Tirer */
 function shoot() {
-    bullets.push({ x: player.x + player.w/2 - 5, y: player.y, w:10, h:20, speed:10 });
+    bullets.push({ x: player.x+player.w/2-5, y: player.y, w:10, h:20, speed:10 });
+    shootSound.currentTime=0;
+    shootSound.play();
 }
 
-/* Dessiner balles */
+/* Balles */
 function drawBullets() {
     ctx.fillStyle = "yellow";
     bullets.forEach((b,i)=>{
@@ -66,41 +76,81 @@ function drawBullets() {
 
 /* Ennemis */
 function spawnEnemy(){
+    if(level <5 || boss) return; // Boss level après 5
     let w = 40, h = 40;
-    enemies.push({ x: Math.random()*(canvas.width-w), y:-h, w, h, speed:2+Math.random()*2 });
+    enemies.push({ x: Math.random()*(canvas.width-w), y:-h, w, h, speed:2+Math.random()*level });
 }
 setInterval(spawnEnemy,1000);
 
+function spawnBoss(){
+    boss = { x: canvas.width/2 - 50, y: -100, w:100, h:100, speed:1, hp: 20+level*5 };
+}
+
+/* Dessiner ennemis et boss */
 function drawEnemies(){
     ctx.fillStyle = "red";
     enemies.forEach((e,ei)=>{
         e.y += e.speed;
         ctx.fillRect(e.x,e.y,e.w,e.h);
 
-        // collision balle
+        // Collision balle
         bullets.forEach((b,bi)=>{
             if(b.x < e.x+e.w && b.x+b.w > e.x && b.y < e.y+e.h && b.y+b.h > e.y){
                 enemies.splice(ei,1);
                 bullets.splice(bi,1);
                 score++;
                 document.getElementById("score").innerText = "Score : "+score;
+                explosionSound.currentTime=0;
+                explosionSound.play();
             }
         });
 
-        // collision joueur
+        // Collision joueur
         if(player.x < e.x+e.w && player.x+player.w > e.x && player.y < e.y+e.h && player.y+player.h > e.y){
             enemies.splice(ei,1);
             lives--;
             document.getElementById("lives").innerText = "❤️ x"+lives;
-            if(lives <= 0){
+            explosionSound.currentTime=0;
+            explosionSound.play();
+            if(lives<=0){
                 alert("💀 Game Over ! Score : "+score);
                 location.reload();
             }
         }
 
-        // ennemi sorti
-        if(e.y > canvas.height) enemies.splice(ei,1);
+        if(e.y>canvas.height) enemies.splice(ei,1);
     });
+
+    // Boss
+    if(boss){
+        boss.y += boss.speed;
+        if(boss.y > 50) boss.speed=0;
+        ctx.fillStyle="purple";
+        ctx.fillRect(boss.x,boss.y,boss.w,boss.h);
+
+        // collision balle
+        bullets.forEach((b,bi)=>{
+            if(b.x < boss.x+boss.w && b.x+b.w > boss.x && b.y < boss.y+boss.h && b.y+b.h > boss.y){
+                bullets.splice(bi,1);
+                boss.hp--;
+                explosionSound.currentTime=0;
+                explosionSound.play();
+                if(boss.hp<=0){
+                    boss=null;
+                    level++;
+                    document.getElementById("level").innerText="Niveau : "+level;
+                }
+            }
+        });
+
+        // collision joueur
+        if(player.x < boss.x+boss.w && player.x+player.w > boss.x && player.y < boss.y+boss.h && player.y+player.h > boss.y){
+            lives=0;
+            document.getElementById("lives").innerText="❤️ x0";
+            alert("💀 Game Over ! Score : "+score);
+            location.reload();
+        }
+    }
 }
 
 /* Clavier */
@@ -110,15 +160,15 @@ document.addEventListener("keydown", e=>{
     if(e.key===" ") shoot();
 });
 
-/* Mobile boutons */
+/* Mobile */
 document.getElementById("left").addEventListener("touchstart", ()=>{ player.x -= player.speed*3; });
 document.getElementById("right").addEventListener("touchstart", ()=>{ player.x += player.speed*3; });
 document.getElementById("shoot").addEventListener("touchstart", shoot);
 
 /* Musique */
 function toggleMusic(){
-    if(playing){ music.pause(); } else { music.play(); }
-    playing = !playing;
+    if(musicPlaying){ music.pause(); } else { music.play(); }
+    musicPlaying=!musicPlaying;
 }
 
 /* Boucle du jeu */
@@ -127,6 +177,7 @@ function gameLoop(){
     drawPlayer();
     drawBullets();
     drawEnemies();
+    if(level>=5 && !boss) spawnBoss();
     requestAnimationFrame(gameLoop);
 }
 
